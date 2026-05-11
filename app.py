@@ -56,29 +56,31 @@ if login():
         st.rerun()
 
     # ------------------------------------------------
-    # TELA: BALANÇO FINANCEIRO (COM TOTAL INVESTIDO)
+    # TELA: BALANÇO FINANCEIRO (VALOR PAGO)
     # ------------------------------------------------
     if opcao == "Balanço Financeiro":
-        st.header("📊 Balanço Financeiro Detalhado")
+        st.header("📊 Balanço Financeiro")
         if df_movimentacoes.empty:
             st.info("Sem dados para exibir.")
         else:
-            # 1. TOTAL INVESTIDO (Soma de todas as Entradas/Produção)
-            investido = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada']['Valor Total'].sum()
+            # 1. VALOR PAGO TOTAL (Investimento em produção)
+            valor_pago_total = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada']['Valor Total'].sum()
             
-            # 2. FATURAMENTO (Soma de todas as Saídas/Vendas)
+            # 2. FATURAMENTO (Vendas)
             vendas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída']
             faturamento = vendas['Valor Total'].sum()
             
-            # 3. LUCRO (Faturamento - Custo dos itens que foram vendidos)
+            # 3. CUSTO DAS VENDAS (Baseado no Valor Pago unitário do Cadastro)
             df_custos = pd.merge(vendas, df_cadastro[['Código', 'Valor Pago']], on='Código', how='left')
             df_custos['Custo Unitario'] = df_custos['Valor Pago'].fillna(0).astype(float)
             custo_das_vendas = (df_custos['Quantidade'] * df_custos['Custo Unitario']).sum()
+            
+            # 4. LUCRO ESTIMADO
             lucro_estimado = faturamento - custo_das_vendas
 
             # Exibição dos cards
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Total Investido", f"R$ {investido:.2f}")
+            c1.metric("Valor Pago (Total)", f"R$ {valor_pago_total:.2f}")
             c2.metric("Faturamento", f"R$ {faturamento:.2f}")
             c3.metric("Custo das Vendas", f"R$ {custo_das_vendas:.2f}")
             c4.metric("Lucro Estimado", f"R$ {lucro_estimado:.2f}")
@@ -88,7 +90,7 @@ if login():
             st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
 
     # ------------------------------------------------
-    # (AS OUTRAS TELAS CONTINUAM IGUAIS)
+    # TELA: NOVA VENDA/PRODUÇÃO
     # ------------------------------------------------
     elif opcao == "Nova Venda/Produção":
         st.header("🛒 Registrar Venda ou Produção")
@@ -107,7 +109,8 @@ if login():
                 if st.form_submit_button("Confirmar Registro"):
                     cod = str(produto).split(" - ")[0]
                     dados_p = df_cadastro[df_cadastro['Código'].astype(str) == cod].iloc[0]
-                    # Se for Saída usa preço de venda, se for Entrada usa custo (valor pago)
+                    
+                    # Usa Preço Venda para Saída e Valor Pago para Entrada
                     preco_ref = dados_p['Preço Venda'] if "Saída" in tipo else dados_p['Valor Pago']
                     valor_u = float(str(preco_ref).replace(',', '.'))
                     total = valor_u * qtd
@@ -121,9 +124,10 @@ if login():
                         'Cliente/Obs': obs
                     }])
                     novo.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
-                    st.success(f"Registrado! Valor: R$ {total:.2f}")
+                    st.success(f"Registrado! Valor Processado: R$ {total:.2f}")
                     st.rerun()
 
+    # (Telas de Estoque e Cadastro permanecem conforme a lógica anterior)
     elif opcao == "Painel de Estoque":
         st.header("📦 Controle de Estoque")
         if not df_movimentacoes.empty:
@@ -146,7 +150,7 @@ if login():
             sab_n = c2.text_input("Sabor")
             c3, c4 = st.columns(2)
             pre_v = c3.number_input("Preço de Venda (R$)", min_value=0.0, format="%.2f")
-            pre_p = c4.number_input("Valor Pago/Custo (R$)", min_value=0.0, format="%.2f")
+            pre_p = c4.number_input("Valor Pago (Custo Unitário)", min_value=0.0, format="%.2f")
             if st.form_submit_button("Salvar"):
                 if cod_n and sab_n:
                     novo_p = pd.DataFrame([{'Código': cod_n, 'Sabor': sab_n, 'Preço Venda': pre_v, 'Valor Pago': pre_p}])
