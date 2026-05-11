@@ -15,7 +15,7 @@ ARQ_MOVIMENTACOES = 'movimentacoes.csv'
 def ler_dados_seguro(nome_arquivo, colunas_padrao):
     if not os.path.exists(nome_arquivo):
         df = pd.DataFrame(columns=colunas_padrao)
-        df.to_csv(nome_arquivo, index=False, encoding='utf-8-sig', sep=';')
+        df.to_csv(nome_arquivo, index=False, encoding='utf-8-sig', sep=',')
         return df
     try:
         # Tenta ler com ponto e vírgula primeiro
