@@ -13,22 +13,20 @@ ARQ_MOVIMENTACOES = 'movimentacoes.csv'
 
 # Cria os arquivos vazios se não existirem
 if not os.path.exists(ARQ_CADASTRO):
-    pd.DataFrame(columns=['Código', 'Sabor', 'Preço Venda']).to_csv(ARQ_CADASTRO, index=False, encoding='utf-8-sig')
+    pd.DataFrame(columns=['Código', 'Sabor', 'Preço Venda']).to_csv(ARQ_CADASTRO, index=False, encoding='utf-8-sig', sep=';')
 if not os.path.exists(ARQ_MOVIMENTACOES):
-    pd.DataFrame(columns=['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs']).to_csv(ARQ_MOVIMENTACOES, index=False, encoding='utf-8-sig')
+    pd.DataFrame(columns=['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs']).to_csv(ARQ_MOVIMENTACOES, index=False, encoding='utf-8-sig', sep=';')
 
-# Função blindada para ler os arquivos corrigindo caracteres e espaços invisíveis
+# Função blindada para ler os arquivos corrigindo caracteres, espaços e delimitadores
 def ler_arquivo_limpo(nome_arquivo):
     try:
-        # Tenta ler no padrão do Brasil (ponto e vírgula) e UTF-8 limpo
-        df = pd.read_csv(nome_arquivo, sep=';', encoding='utf-8-sig')
-        if len(df.columns) < 2: 
-            # Se falhar, tenta o padrão internacional (vírgula)
-            df = pd.read_csv(nome_arquivo, sep=',', encoding='utf-8-sig')
+        # A engine 'python' com sep=None auto-detecta se o arquivo usa vírgula ou ponto e vírgula
+        df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='utf-8-sig', on_bad_lines='skip')
     except:
-        df = pd.read_csv(nome_arquivo, sep=',', encoding='latin-1')
+        # Fallback caso o arquivo tenha sido salvo num Excel mais antigo do Windows
+        df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
     
-    # HIGIENIZAÇÃO MÁXIMA: Remove espaços em branco e caracteres fantasmas das colunas
+    # HIGIENIZAÇÃO: Remove espaços em branco e caracteres fantasmas das colunas
     df.columns = df.columns.str.replace('ï»¿', '').str.replace('\ufeff', '').str.strip()
     return df
 
@@ -48,9 +46,8 @@ opcao = st.sidebar.radio("Navegação:", ["Nova Movimentação (Venda/Produção
 if opcao == "Nova Movimentação (Venda/Produção)":
     st.header("🛒 Registrar Venda ou Nova Produção")
     
-    # Verifica de forma segura se a coluna Código existe após a limpeza
     if df_cadastro.empty or 'Código' not in df_cadastro.columns:
-        st.warning("Cadastre seus sabores primeiro na aba 'Cadastro de Produtos' ou verifique o arquivo cadastro.csv.")
+        st.warning("Cadastre seus sabores primeiro na aba 'Cadastro de Produtos'.")
     else:
         with st.form("form_movimentacao", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -87,7 +84,7 @@ if opcao == "Nova Movimentação (Venda/Produção)":
                     'Cliente/Obs': obs
                 }])
                 
-                novo_registro.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig')
+                novo_registro.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
                 st.success(f"Registrado com sucesso! Valor Total: R$ {valor_total:.2f}")
 
 # ------------------------------------------------
@@ -134,7 +131,7 @@ elif opcao == "Cadastro de Produtos":
         
         if submit and codigo and sabor:
             novo_produto = pd.DataFrame([{'Código': str(codigo), 'Sabor': str(sabor), 'Preço Venda': preco}])
-            novo_produto.to_csv(ARQ_CADASTRO, mode='a', header=False, index=False, encoding='utf-8-sig')
+            novo_produto.to_csv(ARQ_CADASTRO, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
             st.success(f"Produto {codigo} cadastrado com sucesso!")
             
     st.subheader("Produtos Cadastrados")
