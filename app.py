@@ -70,13 +70,9 @@ if login():
             vendas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída']
             faturamento = vendas['Valor Total'].sum()
             
-            # 3. CUSTO DAS VENDAS (Baseado no Valor Pago unitário do Cadastro)
-            df_custos = pd.merge(vendas, df_cadastro[['Código', 'Valor Pago']], on='Código', how='left')
-            df_custos['Custo Unitario'] = df_custos['Valor Pago'].fillna(0).astype(float)
-            custo_das_vendas = (df_custos['Quantidade'] * df_custos['Custo Unitario']).sum()
-            
+                     
             # 4. LUCRO ESTIMADO
-            lucro_estimado = faturamento - custo_das_vendas
+            lucro_estimado = faturamento - valor_pago_total
 
             # Exibição dos cards
             c1, c2, c3, c4 = st.columns(4)
