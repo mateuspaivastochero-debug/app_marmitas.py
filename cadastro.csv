@@ -1,12 +1,12 @@
 Código;Sabor;Preço Venda
-H6;Risoto de cabotiá com ragu de carne;30.90
-L4;Risoto de alho porô com ragu de carne e purê de moranga;29.90
-H5;Filé de frango a parmegiana com arroz branco e mix de legumes;30.90
-L1;Spaghetti integral ao pesto, galeto e purê de moranga;29.90
-L2-F;Massa penne ao molho fit, carne acebolada em cubos e mix de legumes;29.90
-P6;Spaghetti ao molho sugo com almôndegas;29.90
-L5;Arroz integral a primavera;29.90
-P3;Spaghetti integral a bolonhesa e batatas rústicas;29.90
-L3;Purê de batata doce, frango crocante e mix de legumes;30.90
-L2-B;Massa penne ao molho branco, iscas de alcatra;29.90
-L7;Batata doce assada com frango grelhado;29.90
+H6;Risoto de cabotiá com ragu de carne;30.90;0
+L4;Risoto de alho porô com ragu de carne e purê de moranga;29.90;0
+H5;Filé de frango a parmegiana com arroz branco e mix de legumes;30.90;0
+L1;Spaghetti integral ao pesto, galeto e purê de moranga;29.90;0
+L2-F;Massa penne ao molho fit, carne acebolada em cubos e mix de legumes;29.90;0
+P6;Spaghetti ao molho sugo com almôndegas;29.90;0
+L5;Arroz integral a primavera;29.90;0
+P3;Spaghetti integral a bolonhesa e batatas rústicas;29.90;0
+L3;Purê de batata doce, frango crocante e mix de legumes;30.90;0
+L2-B;Massa penne ao molho branco, iscas de alcatra;29.90;0
+L7;Batata doce assada com frango grelhado;29.90;0
