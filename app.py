@@ -56,33 +56,33 @@ if login():
         st.rerun()
 
     # ------------------------------------------------
-    # TELA: BALANÇO FINANCEIRO (VALOR PAGO)
+    # TELA: BALANÇO FINANCEIRO (SIMPLIFICADO)
     # ------------------------------------------------
     if opcao == "Balanço Financeiro":
         st.header("📊 Balanço Financeiro")
         if df_movimentacoes.empty:
             st.info("Sem dados para exibir.")
         else:
-            # 1. VALOR PAGO TOTAL (Investimento em produção)
-            valor_pago_total = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada']['Valor Total'].sum()
+            # 1. VALOR INVESTIDO (Soma de tudo que foi pago nas ENTRADAS)
+            valor_investido = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada']['Valor Total'].sum()
             
-            # 2. FATURAMENTO (Vendas)
-            vendas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída']
-            faturamento = vendas['Valor Total'].sum()
+            # 2. VALOR DAS VENDAS (Soma bruta de todas as SAÍDAS)
+            valor_vendas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída']['Valor Total'].sum()
             
-                     
-            # 4. LUCRO ESTIMADO
-            lucro_estimado = faturamento - valor_pago_total
+            # 3. FATURAMENTO REAL (Vendas - Investimento)
+            faturamento_real = valor_vendas - valor_investido
 
-            # Exibição dos cards
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Valor Pago (Total)", f"R$ {valor_pago_total:.2f}")
-            c2.metric("Faturamento", f"R$ {faturamento:.2f}")
-            c3.metric("Custo das Vendas", f"R$ {custo_das_vendas:.2f}")
-            c4.metric("Lucro Estimado", f"R$ {lucro_estimado:.2f}")
+            # Exibição dos cards principais
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Valor Investido (Compra)", f"R$ {valor_investido:.2f}")
+            c2.metric("Valor das Vendas", f"R$ {valor_vendas:.2f}")
+            
+            # Cor do faturamento (verde se positivo, vermelho se negativo)
+            c3.metric("Faturamento (Resultado)", f"R$ {faturamento_real:.2f}", 
+                      delta=f"{faturamento_real:.2f}", delta_color="normal")
 
             st.divider()
-            st.subheader("Histórico de Movimentações")
+            st.subheader("Histórico Geral de Movimentações")
             st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
 
     # ------------------------------------------------
@@ -106,7 +106,7 @@ if login():
                     cod = str(produto).split(" - ")[0]
                     dados_p = df_cadastro[df_cadastro['Código'].astype(str) == cod].iloc[0]
                     
-                    # Usa Preço Venda para Saída e Valor Pago para Entrada
+                    # Usa Valor Pago para Entrada e Preço Venda para Saída
                     preco_ref = dados_p['Preço Venda'] if "Saída" in tipo else dados_p['Valor Pago']
                     valor_u = float(str(preco_ref).replace(',', '.'))
                     total = valor_u * qtd
@@ -120,10 +120,10 @@ if login():
                         'Cliente/Obs': obs
                     }])
                     novo.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
-                    st.success(f"Registrado! Valor Processado: R$ {total:.2f}")
+                    st.success(f"Registrado! Valor: R$ {total:.2f}")
                     st.rerun()
 
-    # (Telas de Estoque e Cadastro permanecem conforme a lógica anterior)
+    # Telas de Estoque e Cadastro permanecem iguais para manter a funcionalidade
     elif opcao == "Painel de Estoque":
         st.header("📦 Controle de Estoque")
         if not df_movimentacoes.empty:
