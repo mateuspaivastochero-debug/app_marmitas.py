@@ -4,21 +4,30 @@ from datetime import date
 import os
 
 # ------------------------------------------------
-# CONFIGURAÇÕES E SEGURANÇA
+# CONFIGURAÇÕES E USUÁRIOS
 # ------------------------------------------------
 st.set_page_config(page_title="Gestão de Marmitas", layout="wide")
 
-SENHA_ACESSO = "1234" 
+# Dicionário de usuários e senhas
+USUARIOS = {
+    "Lidiane": "1234",
+    "Mateus": "4321"
+}
 
 def login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
+        st.session_state.usuario_atual = None
+
     if not st.session_state.autenticado:
         st.title("🔐 Acesso ao Sistema")
-        senha = st.text_input("Digite a senha para entrar:", type="password")
+        user_select = st.selectbox("Selecione seu usuário:", list(USUARIOS.keys()))
+        senha = st.text_input("Digite sua senha:", type="password")
+        
         if st.button("Entrar"):
-            if senha == SENHA_ACESSO:
+            if USUARIOS.get(user_select) == senha:
                 st.session_state.autenticado = True
+                st.session_state.usuario_atual = user_select
                 st.rerun()
             else:
                 st.error("Senha incorreta!")
@@ -48,47 +57,19 @@ if login():
     df_cadastro = ler_dados_seguro(ARQ_CADASTRO, ['Código', 'Sabor', 'Preço Venda', 'Valor Pago'])
     df_movimentacoes = ler_dados_seguro(ARQ_MOVIMENTACOES, ['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs'])
 
-    st.sidebar.title("Sistema de Marmitas")
+    # Barra lateral com identificação do usuário
+    st.sidebar.title(f"Olá, {st.session_state.usuario_atual}!")
     opcao = st.sidebar.radio("Navegação:", ["Nova Venda/Produção", "Painel de Estoque", "Balanço Financeiro", "Cadastro de Produtos", "Sair"])
 
     if opcao == "Sair":
         st.session_state.autenticado = False
+        st.session_state.usuario_atual = None
         st.rerun()
 
     # ------------------------------------------------
-    # TELA: BALANÇO FINANCEIRO (SIMPLIFICADO)
+    # TELA: NOVA VENDA/PRODUÇÃO (COM REGISTRO DE USUÁRIO)
     # ------------------------------------------------
-    if opcao == "Balanço Financeiro":
-        st.header("📊 Balanço Financeiro")
-        if df_movimentacoes.empty:
-            st.info("Sem dados para exibir.")
-        else:
-            # 1. VALOR INVESTIDO (Soma de tudo que foi pago nas ENTRADAS)
-            valor_investido = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada']['Valor Total'].sum()
-            
-            # 2. VALOR DAS VENDAS (Soma bruta de todas as SAÍDAS)
-            valor_vendas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída']['Valor Total'].sum()
-            
-            # 3. FATURAMENTO REAL (Vendas - Investimento)
-            faturamento_real = valor_vendas - valor_investido
-
-            # Exibição dos cards principais
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Valor Investido (Compra)", f"R$ {valor_investido:.2f}")
-            c2.metric("Valor das Vendas", f"R$ {valor_vendas:.2f}")
-            
-            # Cor do faturamento (verde se positivo, vermelho se negativo)
-            c3.metric("Faturamento (Resultado)", f"R$ {faturamento_real:.2f}", 
-                      delta=f"{faturamento_real:.2f}", delta_color="normal")
-
-            st.divider()
-            st.subheader("Histórico Geral de Movimentações")
-            st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
-
-    # ------------------------------------------------
-    # TELA: NOVA VENDA/PRODUÇÃO
-    # ------------------------------------------------
-    elif opcao == "Nova Venda/Produção":
+    if opcao == "Nova Venda/Produção":
         st.header("🛒 Registrar Venda ou Produção")
         if df_cadastro.empty:
             st.warning("Cadastre os produtos primeiro.")
@@ -100,16 +81,20 @@ if login():
                 produto = col1.selectbox("Produto", lista_p)
                 qtd = col2.number_input("Quantidade", min_value=1, step=1)
                 dt = col2.date_input("Data", date.today())
-                obs = st.text_input("Observação/Cliente")
+                obs_adicional = st.text_input("Observação/Cliente (Opcional)")
                 
                 if st.form_submit_button("Confirmar Registro"):
                     cod = str(produto).split(" - ")[0]
                     dados_p = df_cadastro[df_cadastro['Código'].astype(str) == cod].iloc[0]
                     
-                    # Usa Valor Pago para Entrada e Preço Venda para Saída
                     preco_ref = dados_p['Preço Venda'] if "Saída" in tipo else dados_p['Valor Pago']
                     valor_u = float(str(preco_ref).replace(',', '.'))
                     total = valor_u * qtd
+                    
+                    # Identifica quem fez a ação no histórico
+                    log_usuario = f"Por: {st.session_state.usuario_atual}"
+                    if obs_adicional:
+                        log_usuario += f" | Obs: {obs_adicional}"
                     
                     novo = pd.DataFrame([{
                         'Data': dt.strftime("%d/%m/%Y"),
@@ -117,20 +102,40 @@ if login():
                         'Código': cod,
                         'Quantidade': qtd,
                         'Valor Total': round(total, 2),
-                        'Cliente/Obs': obs
+                        'Cliente/Obs': log_usuario
                     }])
                     novo.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
-                    st.success(f"Registrado! Valor: R$ {total:.2f}")
+                    st.success(f"Registrado por {st.session_state.usuario_atual}!")
                     st.rerun()
 
-    # Telas de Estoque e Cadastro permanecem iguais para manter a funcionalidade
+    # ------------------------------------------------
+    # TELA: BALANÇO FINANCEIRO
+    # ------------------------------------------------
+    elif opcao == "Balanço Financeiro":
+        st.header("📊 Balanço Financeiro")
+        if df_movimentacoes.empty:
+            st.info("Sem dados para exibir.")
+        else:
+            valor_investido = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada']['Valor Total'].sum()
+            valor_vendas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída']['Valor Total'].sum()
+            faturamento_real = valor_vendas - valor_investido
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Valor Investido (Compra)", f"R$ {valor_investido:.2f}")
+            c2.metric("Valor das Vendas", f"R$ {valor_vendas:.2f}")
+            c3.metric("Faturamento (Resultado)", f"R$ {faturamento_real:.2f}", delta=f"{faturamento_real:.2f}")
+
+            st.divider()
+            st.subheader("Histórico Detalhado (Quem fez o quê)")
+            # Mostra a tabela com a coluna Cliente/Obs onde está o nome do usuário
+            st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
+
+    # ... (As outras telas permanecem iguais)
     elif opcao == "Painel de Estoque":
         st.header("📦 Controle de Estoque")
         if not df_movimentacoes.empty:
             df_m = df_movimentacoes.copy()
             df_c = df_cadastro.copy()
-            df_m['Código'] = df_m['Código'].astype(str)
-            df_c['Código'] = df_c['Código'].astype(str)
             ent = df_m[df_m['Tipo'] == 'Entrada'].groupby('Código')['Quantidade'].sum().reset_index(name='Entradas')
             sai = df_m[df_m['Tipo'] == 'Saída'].groupby('Código')['Quantidade'].sum().reset_index(name='Saídas')
             stk = pd.merge(df_c[['Código', 'Sabor']], ent, on='Código', how='left').fillna(0)
@@ -154,3 +159,4 @@ if login():
                     st.success("Salvo!")
                     st.rerun()
         st.dataframe(df_cadastro, use_container_width=True, hide_index=True)
+        
