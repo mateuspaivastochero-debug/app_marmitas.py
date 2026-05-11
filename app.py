@@ -11,30 +11,30 @@ st.set_page_config(page_title="Gestão de Marmitas Fit", layout="wide")
 ARQ_CADASTRO = 'cadastro.csv'
 ARQ_MOVIMENTACOES = 'movimentacoes.csv'
 
-# Cria os arquivos vazios se não existirem
+# Cria os ficheiros vazios se não existirem
 if not os.path.exists(ARQ_CADASTRO):
-    pd.DataFrame(columns=['Código', 'Sabor', 'Preço Venda']).to_csv(ARQ_CADASTRO, index=False)
+    pd.DataFrame(columns=['Código', 'Sabor', 'Preço Venda']).to_csv(ARQ_CADASTRO, index=False, encoding='latin-1')
 if not os.path.exists(ARQ_MOVIMENTACOES):
-    pd.DataFrame(columns=['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs']).to_csv(ARQ_MOVIMENTACOES, index=False)
+    pd.DataFrame(columns=['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs']).to_csv(ARQ_MOVIMENTACOES, index=False, encoding='latin-1')
 
-# Carrega os dados para o Pandas
-df_cadastro = pd.read_csv(ARQ_CADASTRO)
-df_movimentacoes = pd.read_csv(ARQ_MOVIMENTACOES)
+# Carrega os dados para o Pandas lidando com os acentos
+df_cadastro = pd.read_csv(ARQ_CADASTRO, encoding='latin-1')
+df_movimentacoes = pd.read_csv(ARQ_MOVIMENTACOES, encoding='latin-1')
 
 # ------------------------------------------------
 # MENU LATERAL
 # ------------------------------------------------
 st.sidebar.title("Menu do Sistema")
-opcao = st.sidebar.radio("Navegação:", ["Nova Movimentação (Venda/Produção)", "Painel de Estoque", "Cadastro de Produtos", "Ver Histórico"])
+opcao = st.sidebar.radio("Navegação:", ["Nova Movimentação (Venda/Produção)", "Painel de Stock", "Cadastro de Produtos", "Ver Histórico"])
 
 # ------------------------------------------------
-# TELA 1: REGISTRAR NOVA MOVIMENTAÇÃO
+# ECRÃ 1: REGISTAR NOVA MOVIMENTAÇÃO
 # ------------------------------------------------
 if opcao == "Nova Movimentação (Venda/Produção)":
-    st.header("🛒 Registrar Venda ou Nova Produção")
+    st.header("🛒 Registar Venda ou Nova Produção")
     
     if df_cadastro.empty:
-        st.warning("Cadastre seus sabores primeiro na aba 'Cadastro de Produtos'.")
+        st.warning("Cadastre os seus sabores primeiro no separador 'Cadastro de Produtos'.")
     else:
         with st.form("form_movimentacao", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -50,7 +50,7 @@ if opcao == "Nova Movimentação (Venda/Produção)":
                 data_mov = st.date_input("Data", date.today())
                 obs = st.text_input("Cliente / Observação (Opcional)")
                 
-            submit = st.form_submit_button("Registrar")
+            submit = st.form_submit_button("Registar")
             
             if submit:
                 # Extrai apenas o código (antes do hífen)
@@ -70,38 +70,38 @@ if opcao == "Nova Movimentação (Venda/Produção)":
                     'Cliente/Obs': obs
                 }])
                 
-                # Salva no arquivo
-                novo_registro.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False)
-                st.success(f"Registrado com sucesso! Valor Total: R$ {valor_total:.2f}")
+                # Guarda no ficheiro com a codificação correta
+                novo_registro.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='latin-1')
+                st.success(f"Registado com sucesso! Valor Total: R$ {valor_total:.2f}")
 
 # ------------------------------------------------
-# TELA 2: PAINEL DE ESTOQUE (Calculado Automaticamente)
+# ECRÃ 2: PAINEL DE STOCK (Calculado Automaticamente)
 # ------------------------------------------------
-elif opcao == "Painel de Estoque":
-    st.header("📦 Estoque Atual")
+elif opcao == "Painel de Stock":
+    st.header("📦 Stock Atual")
     
     if df_movimentacoes.empty:
-        st.info("Nenhuma movimentação registrada ainda.")
+        st.info("Nenhuma movimentação registada ainda.")
     else:
         # Separa entradas e saídas
         entradas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada'].groupby('Código')['Quantidade'].sum().reset_index(name='Total Entradas')
         saidas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída'].groupby('Código')['Quantidade'].sum().reset_index(name='Total Saídas')
         
-        # Faz o cruzamento (Merge) das tabelas usando Pandas
+        # Faz o cruzamento (Merge) das tabelas
         estoque = pd.merge(df_cadastro[['Código', 'Sabor']], entradas, on='Código', how='left')
         estoque = pd.merge(estoque, saidas, on='Código', how='left')
         
-        # Preenche valores vazios com zero e calcula o estoque final
+        # Preenche valores vazios com zero e calcula o stock final
         estoque.fillna(0, inplace=True)
-        estoque['Estoque Atual'] = estoque['Total Entradas'] - estoque['Total Saídas']
+        estoque['Stock Atual'] = estoque['Total Entradas'] - estoque['Total Saídas']
         
         # Formata para mostrar como números inteiros
-        estoque[['Total Entradas', 'Total Saídas', 'Estoque Atual']] = estoque[['Total Entradas', 'Total Saídas', 'Estoque Atual']].astype(int)
+        estoque[['Total Entradas', 'Total Saídas', 'Stock Atual']] = estoque[['Total Entradas', 'Total Saídas', 'Stock Atual']].astype(int)
         
         st.dataframe(estoque, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------
-# TELA 3: CADASTRO DE PRODUTOS
+# ECRÃ 3: CADASTRO DE PRODUTOS
 # ------------------------------------------------
 elif opcao == "Cadastro de Produtos":
     st.header("📝 Cadastrar Novo Sabor")
@@ -115,18 +115,18 @@ elif opcao == "Cadastro de Produtos":
         with col3:
             preco = st.number_input("Preço de Venda (R$)", min_value=0.0, step=0.5, format="%.2f")
             
-        submit = st.form_submit_button("Salvar Produto")
+        submit = st.form_submit_button("Guardar Produto")
         
         if submit and codigo and sabor:
             novo_produto = pd.DataFrame([{'Código': codigo, 'Sabor': sabor, 'Preço Venda': preco}])
-            novo_produto.to_csv(ARQ_CADASTRO, mode='a', header=False, index=False)
+            novo_produto.to_csv(ARQ_CADASTRO, mode='a', header=False, index=False, encoding='latin-1')
             st.success(f"Produto {codigo} cadastrado com sucesso!")
             
     st.subheader("Produtos Cadastrados")
     st.dataframe(df_cadastro, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------
-# TELA 4: HISTÓRICO BRUTO
+# ECRÃ 4: HISTÓRICO BRUTO
 # ------------------------------------------------
 elif opcao == "Ver Histórico":
     st.header("📄 Histórico de Movimentações")
