@@ -11,135 +11,120 @@ st.set_page_config(page_title="Gestão de Marmitas", layout="wide")
 ARQ_CADASTRO = 'cadastro.csv'
 ARQ_MOVIMENTACOES = 'movimentacoes.csv'
 
-# Cria os arquivos vazios se não existirem
-if not os.path.exists(ARQ_CADASTRO):
-    pd.DataFrame(columns=['Código', 'Sabor', 'Preço Venda']).to_csv(ARQ_CADASTRO, index=False, encoding='utf-8-sig', sep=';')
-if not os.path.exists(ARQ_MOVIMENTACOES):
-    pd.DataFrame(columns=['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs']).to_csv(ARQ_MOVIMENTACOES, index=False, encoding='utf-8-sig', sep=';')
-
-# Função blindada para ler os arquivos corrigindo caracteres, espaços e delimitadores
-def ler_arquivo_limpo(nome_arquivo):
+# Função para ler dados garantindo que as colunas não se misturam
+def ler_dados_seguro(nome_arquivo, colunas_padrao):
+    if not os.path.exists(nome_arquivo):
+        df = pd.DataFrame(columns=colunas_padrao)
+        df.to_csv(nome_arquivo, index=False, encoding='utf-8-sig', sep=';')
+        return df
     try:
-        # A engine 'python' com sep=None auto-detecta se o arquivo usa vírgula ou ponto e vírgula
-        df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='utf-8-sig', on_bad_lines='skip')
+        # Tenta ler com ponto e vírgula primeiro
+        df = pd.read_csv(nome_arquivo, sep=';', encoding='utf-8-sig', engine='python', on_bad_lines='skip')
+        # Se leu tudo numa coluna só, tenta com vírgula
+        if len(df.columns) <= 1:
+            df = pd.read_csv(nome_arquivo, sep=',', encoding='utf-8-sig', engine='python', on_bad_lines='skip')
     except:
-        # Fallback caso o arquivo tenha sido salvo num Excel mais antigo do Windows
-        df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
+        df = pd.read_csv(nome_arquivo, sep=',', encoding='latin-1', engine='python', on_bad_lines='skip')
     
-    # HIGIENIZAÇÃO: Remove espaços em branco e caracteres fantasmas das colunas
-    df.columns = df.columns.str.replace('ï»¿', '').str.replace('\ufeff', '').str.strip()
+    # Limpa nomes de colunas e remove espaços invisíveis
+    df.columns = [str(c).strip().replace('ï»¿', '').replace('\ufeff', '') for c in df.columns]
     return df
 
-# Carrega os dados higienizados
-df_cadastro = ler_arquivo_limpo(ARQ_CADASTRO)
-df_movimentacoes = ler_arquivo_limpo(ARQ_MOVIMENTACOES)
+# Inicializa os DataFrames
+df_cadastro = ler_dados_seguro(ARQ_CADASTRO, ['Código', 'Sabor', 'Preço Venda'])
+df_movimentacoes = ler_dados_seguro(ARQ_MOVIMENTACOES, ['Data', 'Tipo', 'Código', 'Quantidade', 'Valor Total', 'Cliente/Obs'])
 
 # ------------------------------------------------
 # MENU LATERAL
 # ------------------------------------------------
 st.sidebar.title("Menu do Sistema")
-opcao = st.sidebar.radio("Navegação:", ["Nova Movimentação (Venda/Produção)", "Painel de Estoque", "Cadastro de Produtos", "Ver Histórico"])
+opcao = st.sidebar.radio("Navegação:", ["Nova Movimentação (Venda/Produção)", "Painel de Stock", "Cadastro de Produtos", "Ver Histórico"])
 
 # ------------------------------------------------
-# TELA 1: REGISTRAR NOVA MOVIMENTAÇÃO
+# ECRÃ 1: REGISTAR NOVA MOVIMENTAÇÃO
 # ------------------------------------------------
 if opcao == "Nova Movimentação (Venda/Produção)":
-    st.header("🛒 Registrar Venda ou Nova Produção")
+    st.header("🛒 Registar Venda ou Nova Produção")
     
     if df_cadastro.empty or 'Código' not in df_cadastro.columns:
-        st.warning("Cadastre seus sabores primeiro na aba 'Cadastro de Produtos'.")
+        st.warning("Cadastre os seus sabores primeiro no separador 'Cadastro de Produtos'.")
     else:
         with st.form("form_movimentacao", clear_on_submit=True):
             col1, col2 = st.columns(2)
-            
             with col1:
-                tipo = st.selectbox("Tipo de Movimento", ["Saída (Venda)", "Entrada (Produção)"])
-                # Força formato de texto para evitar quebras
-                opcoes_produtos = df_cadastro['Código'].astype(str) + " - " + df_cadastro['Sabor'].astype(str)
-                produto_selecionado = st.selectbox("Produto", opcoes_produtos)
-            
+                tipo = st.selectbox("Tipo", ["Saída (Venda)", "Entrada (Produção)"])
+                opcoes = df_cadastro['Código'].astype(str) + " - " + df_cadastro['Sabor'].astype(str)
+                produto_sel = st.selectbox("Produto", opcoes)
             with col2:
-                quantidade = st.number_input("Quantidade", min_value=1, step=1)
-                data_mov = st.date_input("Data", date.today())
-                obs = st.text_input("Cliente / Observação (Opcional)")
-                
-            submit = st.form_submit_button("Registrar")
+                qtd = st.number_input("Quantidade", min_value=1, step=1)
+                dt = st.date_input("Data", date.today())
+                obs = st.text_input("Observação")
             
-            if submit:
-                codigo = str(produto_selecionado).split(" - ")[0]
-                preco_venda = df_cadastro.loc[df_cadastro['Código'].astype(str) == codigo, 'Preço Venda'].values[0]
+            if st.form_submit_button("Registar"):
+                cod = str(produto_sel).split(" - ")[0]
+                preco = df_cadastro.loc[df_cadastro['Código'].astype(str) == cod, 'Preço Venda'].values[0]
                 
-                if isinstance(preco_venda, str):
-                    preco_venda = preco_venda.replace(',', '.')
+                # Converte preço para número se vier como texto do CSV
+                val_unit = float(str(preco).replace(',', '.'))
+                total = val_unit * qtd
                 
-                valor_total = float(preco_venda) * quantidade
-                tipo_bd = "Saída" if "Saída" in tipo else "Entrada"
-                
-                novo_registro = pd.DataFrame([{
-                    'Data': data_mov.strftime("%d/%m/%Y"),
-                    'Tipo': tipo_bd,
-                    'Código': codigo,
-                    'Quantidade': quantidade,
-                    'Valor Total': valor_total,
+                novo = pd.DataFrame([{
+                    'Data': dt.strftime("%d/%m/%Y"),
+                    'Tipo': "Saída" if "Saída" in tipo else "Entrada",
+                    'Código': cod,
+                    'Quantidade': qtd,
+                    'Valor Total': round(total, 2),
                     'Cliente/Obs': obs
                 }])
                 
-                novo_registro.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
-                st.success(f"Registrado com sucesso! Valor Total: R$ {valor_total:.2f}")
+                novo.to_csv(ARQ_MOVIMENTACOES, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
+                st.success(f"Registado! Total: R$ {total:.2f}")
+                st.rerun()
 
 # ------------------------------------------------
-# TELA 2: PAINEL DE ESTOQUE
+# ECRÃ 2: PAINEL DE STOCK
 # ------------------------------------------------
-elif opcao == "Painel de Estoque":
-    st.header("📦 Estoque Atual")
-    
-    if df_movimentacoes.empty or 'Código' not in df_movimentacoes.columns:
-        st.info("Nenhuma movimentação registrada ainda.")
+elif opcao == "Painel de Stock":
+    st.header("📦 Stock Atual")
+    if df_movimentacoes.empty:
+        st.info("Sem movimentações.")
     else:
-        df_movimentacoes['Código'] = df_movimentacoes['Código'].astype(str)
-        df_cadastro['Código'] = df_cadastro['Código'].astype(str)
+        # Garante que os códigos são strings para o cruzamento
+        df_mov = df_movimentacoes.copy()
+        df_cad = df_cadastro.copy()
+        df_mov['Código'] = df_mov['Código'].astype(str)
+        df_cad['Código'] = df_cad['Código'].astype(str)
+
+        ent = df_mov[df_mov['Tipo'] == 'Entrada'].groupby('Código')['Quantidade'].sum().reset_index(name='Entradas')
+        sai = df_mov[df_mov['Tipo'] == 'Saída'].groupby('Código')['Quantidade'].sum().reset_index(name='Saídas')
         
-        entradas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Entrada'].groupby('Código')['Quantidade'].sum().reset_index(name='Total Entradas')
-        saidas = df_movimentacoes[df_movimentacoes['Tipo'] == 'Saída'].groupby('Código')['Quantidade'].sum().reset_index(name='Total Saídas')
+        stk = pd.merge(df_cad[['Código', 'Sabor']], ent, on='Código', how='left').fillna(0)
+        stk = pd.merge(stk, sai, on='Código', how='left').fillna(0)
+        stk['Stock Atual'] = stk['Entradas'] - stk['Saídas']
         
-        estoque = pd.merge(df_cadastro[['Código', 'Sabor']], entradas, on='Código', how='left')
-        estoque = pd.merge(estoque, saidas, on='Código', how='left')
-        
-        estoque.fillna(0, inplace=True)
-        estoque['Estoque Atual'] = estoque['Total Entradas'] - estoque['Total Saídas']
-        
-        estoque[['Total Entradas', 'Total Saídas', 'Estoque Atual']] = estoque[['Total Entradas', 'Total Saídas', 'Estoque Atual']].astype(int)
-        
-        st.dataframe(estoque, use_container_width=True, hide_index=True)
+        st.dataframe(stk, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------
-# TELA 3: CADASTRO DE PRODUTOS
+# ECRÃ 3: CADASTRO DE PRODUTOS
 # ------------------------------------------------
 elif opcao == "Cadastro de Produtos":
-    st.header("📝 Cadastrar Novo Sabor")
-    
-    with st.form("form_cadastro", clear_on_submit=True):
-        col1, col2, col3 = st.columns([1, 3, 1])
-        with col1:
-            codigo = st.text_input("Código (ex: H7)")
-        with col2:
-            sabor = st.text_input("Sabor / Descrição")
-        with col3:
-            preco = st.number_input("Preço de Venda (R$)", min_value=0.0, step=0.5, format="%.2f")
-            
-        submit = st.form_submit_button("Salvar Produto")
-        
-        if submit and codigo and sabor:
-            novo_produto = pd.DataFrame([{'Código': str(codigo), 'Sabor': str(sabor), 'Preço Venda': preco}])
-            novo_produto.to_csv(ARQ_CADASTRO, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
-            st.success(f"Produto {codigo} cadastrado com sucesso!")
-            
-    st.subheader("Produtos Cadastrados")
-    st.dataframe(df_cadastro, use_container_width=True, hide_index=True)
+    st.header("📝 Novo Sabor")
+    with st.form("cad_prod", clear_on_submit=True):
+        c1, c2, c3 = st.columns([1, 2, 1])
+        cod_n = c1.text_input("Código")
+        sab_n = c2.text_input("Sabor")
+        pre_n = c3.number_input("Preço", min_value=0.0, format="%.2f")
+        if st.form_submit_button("Guardar"):
+            if cod_n and sab_n:
+                novo_p = pd.DataFrame([{'Código': cod_n, 'Sabor': sab_n, 'Preço Venda': pre_n}])
+                novo_p.to_csv(ARQ_CADASTRO, mode='a', header=False, index=False, encoding='utf-8-sig', sep=';')
+                st.success("Guardado!")
+                st.rerun()
+    st.dataframe(df_cadastro, use_container_width=True)
 
 # ------------------------------------------------
-# TELA 4: HISTÓRICO BRUTO
+# ECRÃ 4: HISTÓRICO
 # ------------------------------------------------
 elif opcao == "Ver Histórico":
-    st.header("📄 Histórico de Movimentações")
+    st.header("📄 Histórico Completo")
     st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
