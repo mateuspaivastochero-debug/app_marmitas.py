@@ -126,7 +126,7 @@ if login():
             c3.metric("Faturamento (Resultado)", f"R$ {faturamento_real:.2f}", delta=f"{faturamento_real:.2f}")
 
             st.divider()
-            st.subheader("Histórico Detalhado (Quem fez o quê)")
+            st.subheader("Histórico Detalhado")
             # Mostra a tabela com a coluna Cliente/Obs onde está o nome do usuário
             st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
 
