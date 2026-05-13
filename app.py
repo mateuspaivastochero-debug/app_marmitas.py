@@ -7,7 +7,7 @@ from datetime import date
 st.set_page_config(page_title="Gestão de Marmitas", layout="wide")
 
 # URL da sua planilha (Substitua pelo seu link real abaixo)
-URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1rjxVMvNuok2KN2aO2hJGtuCtb2R0YCPwdx9TiS74e3o/edit?usp=sharing"
+URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1rjxVMvNuok2KN2aO2hJGtuCtb2R0YCPwdx9TiS74e3o/edit"
 
 USUARIOS = {"Lidiane": "1234", "Mateus": "4321"}
 
