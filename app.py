@@ -1,50 +1,30 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date
 
-# --- CONFIGURAÇÕES DO SISTEMA ---
+# --- CONFIGURAÇÕES DA PÁGINA ---
 st.set_page_config(page_title="Gestão de Marmitas", layout="wide")
 
-# Identificação da sua Planilha Google
-ID_PLANILHA = "1rjxVMvNuok2KN2aO2hJGtuCtb2R0YCPwdx9TiS74e3o"
+# URL da sua planilha (Versão limpa)
+URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1rjxVMvNuok2KN2aO2hJGtuCtb2R0YCPwdx9TiS74e3o/edit"
 
-# Links de exportação direta (utilizando os GIDs que você forneceu)
-URL_CADASTRO = f"https://docs.google.com/spreadsheets/d/{ID_PLANILHA}/export?format=csv&gid=485394711"
-URL_MOVIMENTACOES = f"https://docs.google.com/spreadsheets/d/{ID_PLANILHA}/export?format=csv&gid=0"
-
-# Controle de Usuários
+# Usuários e Senhas
 USUARIOS = {
     "Lidiane": "1234",
     "Mateus": "4321"
 }
 
-# --- FUNÇÕES DE DADOS ---
-def ler_dados():
-    try:
-        # Lê os dados da planilha. sep=None identifica automaticamente se é vírgula ou ponto e vírgula
-        df_c = pd.read_csv(URL_CADASTRO, sep=None, engine='python', encoding='utf-8')
-        df_m = pd.read_csv(URL_MOVIMENTACOES, sep=None, engine='python', encoding='utf-8')
-    except:
-        # Fallback para outro tipo de codificação caso o Google mude o padrão
-        df_c = pd.read_csv(URL_CADASTRO, sep=None, engine='python', encoding='latin-1')
-        df_m = pd.read_csv(URL_MOVIMENTACOES, sep=None, engine='python', encoding='latin-1')
-    
-    # Limpeza profunda dos nomes das colunas (remove espaços e caracteres invisíveis)
-    df_c.columns = [str(c).strip().replace('ï»¿', '').replace('\ufeff', '') for c in df_c.columns]
-    df_m.columns = [str(c).strip().replace('ï»¿', '').replace('\ufeff', '') for c in df_m.columns]
-    
-    return df_c, df_m
-
-# --- SISTEMA DE LOGIN ---
+# --- FUNÇÃO DE LOGIN ---
 def login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
         st.session_state.usuario_atual = None
 
     if not st.session_state.autenticado:
-        st.title("🔐 Acesso ao Sistema de Marmitas")
-        user_select = st.selectbox("Quem está acessando?", list(USUARIOS.keys()))
-        senha = st.text_input("Sua senha:", type="password")
+        st.title("🔐 Acesso ao Sistema")
+        user_select = st.selectbox("Selecione o utilizador:", list(USUARIOS.keys()))
+        senha = st.text_input("Palavra-passe:", type="password")
         
         if st.button("Entrar"):
             if USUARIOS.get(user_select) == senha:
@@ -52,104 +32,103 @@ def login():
                 st.session_state.usuario_atual = user_select
                 st.rerun()
             else:
-                st.error("Senha incorreta!")
+                st.error("Palavra-passe incorreta!")
         return False
     return True
 
-# --- INÍCIO DO APLICATIVO ---
+# --- EXECUÇÃO PRINCIPAL ---
 if login():
-    # Carrega os dados da Planilha Google
-    df_cadastro, df_movimentacoes = ler_dados()
-    
-    st.sidebar.title(f"Bem-vinda(o), {st.session_state.usuario_atual}!")
-    opcao = st.sidebar.radio("Navegação:", ["Nova Venda/Produção", "Painel de Estoque", "Balanço Financeiro", "Cadastro de Produtos", "Sair"])
+    # Conexão com Google Sheets
+    conn = st.connection("gsheets", type=GSheetsConnection)
+
+    # Função para ler dados (ttl=0 garante que os dados não fiquem em cache antigo)
+    def buscar_dados():
+        df_c = conn.read(spreadsheet=URL_PLANILHA, worksheet="cadastro", ttl=0)
+        df_m = conn.read(spreadsheet=URL_PLANILHA, worksheet="movimentacoes", ttl=0)
+        return df_c, df_m
+
+    df_cadastro, df_movimentacoes = buscar_dados()
+
+    st.sidebar.title(f"Olá, {st.session_state.usuario_atual}!")
+    opcao = st.sidebar.radio("Menu:", ["Nova Venda/Produção", "Painel de Estoque", "Balanço Financeiro", "Cadastro de Produtos", "Sair"])
 
     if opcao == "Sair":
         st.session_state.autenticado = False
-        st.session_state.usuario_atual = None
         st.rerun()
 
-    # --- TELA: NOVA VENDA/PRODUÇÃO ---
+    # --- TELA: REGISTRO DE OPERAÇÃO ---
     if opcao == "Nova Venda/Produção":
         st.header("🛒 Registrar Operação")
         if df_cadastro.empty:
-            st.warning("A lista de produtos está vazia na planilha.")
+            st.warning("Cadastre os produtos primeiro na planilha.")
         else:
-            with st.form("form_registro", clear_on_submit=True):
+            with st.form("form_venda", clear_on_submit=True):
                 col1, col2 = st.columns(2)
-                tipo = col1.selectbox("Tipo de Movimento", ["Saída (Venda)", "Entrada (Produção)"])
+                tipo = col1.selectbox("Tipo", ["Saída (Venda)", "Entrada (Produção)"])
                 
-                # Cria a lista de seleção baseada no cadastro
-                opcoes_produtos = df_cadastro['Código'].astype(str) + " - " + df_cadastro['Sabor'].astype(str)
-                produto_selecionado = col1.selectbox("Selecione o Produto", opcoes_produtos)
+                # Lista de produtos dinâmica
+                opcoes = df_cadastro['Código'].astype(str) + " - " + df_cadastro['Sabor'].astype(str)
+                produto_sel = col1.selectbox("Produto", opcoes)
                 
-                quantidade = col2.number_input("Quantidade", min_value=1, step=1)
-                data_mov = col2.date_input("Data da Operação", date.today())
-                obs_extra = st.text_input("Observação ou Nome do Cliente")
+                qtd = col2.number_input("Quantidade", min_value=1, step=1)
+                data_op = col2.date_input("Data", date.today())
+                obs = st.text_input("Observação/Cliente")
                 
-                if st.form_submit_button("Gerar Linha para Planilha"):
-                    cod = str(produto_selecionado).split(" - ")[0]
+                if st.form_submit_button("Confirmar e Gravar na Planilha"):
+                    # Cálculos
+                    cod = str(produto_sel).split(" - ")[0]
                     dados_p = df_cadastro[df_cadastro['Código'].astype(str) == cod].iloc[0]
+                    preco = dados_p['Preço Venda'] if "Saída" in tipo else dados_p['Valor Pago']
+                    total = float(preco) * qtd
                     
-                    # Define qual preço usar baseado no tipo de movimento
-                    preco_un = dados_p['Preço Venda'] if "Saída" in tipo else dados_p['Valor Pago']
-                    total_calculado = float(str(preco_un).replace(',', '.')) * quantidade
+                    # Criação da nova linha
+                    nova_linha = pd.DataFrame([{
+                        "Data": data_op.strftime("%d/%m/%Y"),
+                        "Tipo": tipo,
+                        "Código": cod,
+                        "Quantidade": qtd,
+                        "Valor Total": total,
+                        "Cliente/Obs": f"Por: {st.session_state.usuario_atual} | {obs}"
+                    }])
                     
-                    # Monta a linha pronta para ser colada na planilha
-                    log_user = f"Por: {st.session_state.usuario_atual}"
-                    if obs_extra: log_user += f" | {obs_extra}"
+                    # Atualização automática na planilha
+                    df_atualizado = pd.concat([df_movimentacoes, nova_linha], ignore_index=True)
+                    conn.update(spreadsheet=URL_PLANILHA, worksheet="movimentacoes", data=df_atualizado)
                     
-                    linha_csv = f"{data_mov.strftime('%d/%m/%Y')};{tipo};{cod};{quantidade};{total_calculado:.2f};{log_user}"
-                    
-                    st.success("Operação processada! Copie a linha abaixo e cole na aba 'movimentacoes' da sua Planilha Google:")
-                    st.code(linha_csv)
-
-    # --- TELA: PAINEL DE ESTOQUE ---
-    elif opcao == "Painel de Estoque":
-        st.header("📦 Estoque Atual")
-        if df_movimentacoes.empty:
-            st.info("Nenhuma movimentação encontrada na planilha.")
-        else:
-            # Garante que os tipos são strings limpas para o filtro
-            df_m = df_movimentacoes.copy()
-            df_m['Tipo'] = df_m['Tipo'].astype(str).str.strip()
-            
-            ent = df_m[df_m['Tipo'].str.contains('Entrada', na=False)].groupby('Código')['Quantidade'].sum().reset_index(name='E')
-            sai = df_m[df_m['Tipo'].str.contains('Saída', na=False)].groupby('Código')['Quantidade'].sum().reset_index(name='S')
-            
-            stk = pd.merge(df_cadastro[['Código', 'Sabor']], ent, on='Código', how='left').fillna(0)
-            stk = pd.merge(stk, sai, on='Código', how='left').fillna(0)
-            stk['Estoque'] = stk['E'] - stk['S']
-            
-            st.dataframe(stk[['Código', 'Sabor', 'Estoque']], use_container_width=True, hide_index=True)
+                    st.success(f"✅ Registado com sucesso por {st.session_state.usuario_atual}!")
+                    st.rerun()
 
     # --- TELA: BALANÇO FINANCEIRO ---
     elif opcao == "Balanço Financeiro":
-        st.header("📊 Resultado Financeiro")
-        if df_movimentacoes.empty:
-            st.info("Adicione dados na planilha para visualizar o balanço.")
-        else:
-            # Soma de todo o valor gasto nas Entradas (Investimento)
-            valor_investido = df_movimentacoes[df_movimentacoes['Tipo'].str.contains('Entrada', na=False)]['Valor Total'].sum()
-            # Soma de todo o valor recebido nas Saídas (Vendas)
-            valor_vendas = df_movimentacoes[df_movimentacoes['Tipo'].str.contains('Saída', na=False)]['Valor Total'].sum()
-            # Faturamento Real = Vendas - Investimento
-            faturamento_real = valor_vendas - valor_investido
+        st.header("📊 Balanço Financeiro")
+        if not df_movimentacoes.empty:
+            # Cálculos de faturamento
+            investido = df_movimentacoes[df_movimentacoes['Tipo'].str.contains('Entrada', na=False)]['Valor Total'].sum()
+            vendas = df_movimentacoes[df_movimentacoes['Tipo'].str.contains('Saída', na=False)]['Valor Total'].sum()
+            lucro = vendas - investido
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("Valor Pago (Investimento)", f"R$ {valor_investido:.2f}")
-            c2.metric("Valor das Vendas (Bruto)", f"R$ {valor_vendas:.2f}")
-            c3.metric("Faturamento (Resultado)", f"R$ {faturamento_real:.2f}", delta=f"{faturamento_real:.2f}")
+            c1.metric("Investimento (Entradas)", f"R$ {investido:.2f}")
+            c2.metric("Vendas (Saídas)", f"R$ {vendas:.2f}")
+            c3.metric("Resultado Final", f"R$ {lucro:.2f}", delta=f"{lucro:.2f}")
 
             st.divider()
-            st.subheader("Histórico de Movimentações (Lido do Google Sheets)")
+            st.subheader("Histórico Completo")
             st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
 
-    # --- TELA: CADASTRO DE PRODUTOS ---
+    # --- TELA: ESTOQUE ---
+    elif opcao == "Painel de Estoque":
+        st.header("📦 Inventário")
+        if not df_movimentacoes.empty:
+            ent = df_movimentacoes[df_movimentacoes['Tipo'].str.contains('Entrada', na=False)].groupby('Código')['Quantidade'].sum().reset_index(name='E')
+            sai = df_movimentacoes[df_movimentacoes['Tipo'].str.contains('Saída', na=False)].groupby('Código')['Quantidade'].sum().reset_index(name='S')
+            stk = pd.merge(df_cadastro[['Código', 'Sabor']], ent, on='Código', how='left').fillna(0)
+            stk = pd.merge(stk, sai, on='Código', how='left').fillna(0)
+            stk['Stock'] = stk['E'] - stk['S']
+            st.dataframe(stk[['Código', 'Sabor', 'Stock']], use_container_width=True, hide_index=True)
+
+    # --- TELA: PRODUTOS ---
     elif opcao == "Cadastro de Produtos":
-        st.header("📝 Produtos Cadastrados")
-        if df_cadastro.empty:
-            st.info("Nenhum produto cadastrado na aba 'cadastro'.")
-        else:
-            st.dataframe(df_cadastro, use_container_width=True, hide_index=True)
-            st.info("Para cadastrar ou alterar produtos, edite diretamente a aba 'cadastro' na sua Planilha Google.")
+        st.header("📝 Produtos Disponíveis")
+        st.dataframe(df_cadastro, use_container_width=True, hide_index=True)
+        st.info("Para alterar preços ou sabores, edite a aba 'cadastro' na sua Planilha Google.")
