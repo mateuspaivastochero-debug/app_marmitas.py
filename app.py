@@ -38,12 +38,13 @@ if login():
     # Conecta ao Google Sheets usando as Secrets [connections.gsheets]
     conn = st.connection("gsheets", type=GSheetsConnection)
 
-    # Carregamento de dados (ttl=0 evita que o app mostre dados antigos do cache)
+    # Carregamento de dados com diagnóstico detalhado
     try:
         df_cadastro = conn.read(worksheet="cadastro", ttl=0)
         df_movimentacoes = conn.read(worksheet="movimentacoes", ttl=0)
     except Exception as e:
-        st.error("Erro de conexão com a planilha. Verifique as Secrets e o compartilhamento.")
+        st.error(f"Erro técnico detalhado: {e}")
+        st.warning("☝️ Leia a mensagem acima. Ela dirá se o erro é o nome da aba (WorksheetNotFound), erro de credencial (JSON inválido) ou permissão negada (API/Compartilhamento).")
         st.stop()
 
     # Barra Lateral
@@ -52,6 +53,7 @@ if login():
 
     if opcao == "Sair":
         st.session_state.autenticado = False
+        st.session_state.usuario_atual = None
         st.rerun()
 
     # --- TELA 1: REGISTRAR OPERAÇÃO ---
@@ -80,7 +82,7 @@ if login():
                     
                     # Define preço unitário: Preço Venda para Saídas, Valor Pago para Entradas
                     preco_un = dados_p['Preço Venda'] if "Saída" in tipo else dados_p['Valor Pago']
-                    total = float(preco_un) * qtd
+                    total = float(str(preco_un).replace(',', '.')) * qtd
                     
                     # Cria a nova linha para adicionar
                     nova_linha = pd.DataFrame([{
@@ -92,7 +94,7 @@ if login():
                         "Cliente/Obs": f"Por: {st.session_state.usuario_atual} | {obs}"
                     }])
                     
-                    # Junta com as movimentações existentes e faz o upload
+                    # Junta com as movimentações existentes e faz o update
                     df_final = pd.concat([df_movimentacoes, nova_linha], ignore_index=True)
                     conn.update(worksheet="movimentacoes", data=df_final)
                     
